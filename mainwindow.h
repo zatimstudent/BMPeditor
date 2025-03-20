@@ -32,8 +32,22 @@ private:
     QImage image;
     QString filePath;  // Uchování cesty k souboru
 
+    // Proměnné pro vlastní vykreslování BMP souboru
+    QByteArray customBMPData;
+    QVector<QRgb> customBMPPalette;
+    int customBMPWidth;
+    int customBMPHeight;
+    int customBMPBitsPerPixel;
+
+    void renderCustomBMP();
+    bool loadCustomBMP(const QString &fileName);
+
     void updateImageInfo();
-    void createMenuBar(); // Funkce pro vytvoření menu
+
+bool loadBMPFile(const QString &filePath);
+
+void createMenuBar(); // Funkce pro vytvoření menu
+
 };
 
 #endif // MAINWINDOW_H

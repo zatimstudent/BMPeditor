@@ -140,6 +140,91 @@ void MainWindow::updateImageInfo() {
     infoTextEdit->append("Format: " + image.format());
 }
 
+void MainWindow::parseBMPHeader(const QByteArray &bmpData) {
+    //clear the text edit
+    infoTextEdit->clear();
+
+    if (bmpData.size() < 54) {
+        infoTextEdit->append("Invalid BMP file: header too small.");
+        return;
+    }
+
+    const char* data = bmpData.constData();
+
+    // --- BMP File Header ---
+    quint16 signature = *reinterpret_cast<const quint16*>(data);
+    quint32 fileSize = *reinterpret_cast<const quint32*>(data + 2);
+    quint16 reserved1 = *reinterpret_cast<const quint16*>(data + 6);
+    quint16 reserved2 = *reinterpret_cast<const quint16*>(data + 8);
+    quint32 dataOffset = *reinterpret_cast<const quint32*>(data + 10);
+
+    // --- DIB Header ---
+    quint32 dibHeaderSize = *reinterpret_cast<const quint32*>(data + 14);
+    qint32 width = *reinterpret_cast<const qint32*>(data + 18);
+    qint32 height = *reinterpret_cast<const qint32*>(data + 22);
+    quint16 planes = *reinterpret_cast<const quint16*>(data + 26);
+    quint16 bitsPerPixel = *reinterpret_cast<const quint16*>(data + 28);
+    quint32 compression = *reinterpret_cast<const quint32*>(data + 30);
+    quint32 imageSize = *reinterpret_cast<const quint32*>(data + 34);
+    qint32 xPixelsPerMeter = *reinterpret_cast<const qint32*>(data + 38);
+    qint32 yPixelsPerMeter = *reinterpret_cast<const qint32*>(data + 42);
+    quint32 colorsUsed = *reinterpret_cast<const quint32*>(data + 46);
+    quint32 importantColors = *reinterpret_cast<const quint32*>(data + 50);
+
+    // --- Výpis hlavičky ---
+    infoTextEdit->append("=== BMP Header Info ===");
+    infoTextEdit->append("Signature: " + QString(QChar(signature & 0xFF)) + QString(QChar((signature >> 8) & 0xFF))); //
+    infoTextEdit->append("File size: " + QString::number(fileSize) + " bytes");
+    infoTextEdit->append("Data offset: " + QString::number(dataOffset) + " bytes");
+    infoTextEdit->append("DIB header size: " + QString::number(dibHeaderSize) + " bytes");
+    infoTextEdit->append("Width: " + QString::number(width));
+    infoTextEdit->append("Height: " + QString::number(height));
+    infoTextEdit->append("Planes: " + QString::number(planes));
+    infoTextEdit->append("Bits per pixel: " + QString::number(bitsPerPixel));
+
+    QString compressionStr;
+    switch (compression) {
+        case 0: compressionStr = "BI_RGB (no compression)"; break;
+        case 1: compressionStr = "BI_RLE8"; break;
+        case 2: compressionStr = "BI_RLE4"; break;
+        default: compressionStr = "Unknown (" + QString::number(compression) + ")"; break;
+    }
+    infoTextEdit->append("Compression: " + compressionStr);
+    infoTextEdit->append("Image size: " + QString::number(imageSize) + " bytes");
+    infoTextEdit->append("X pixels per meter: " + QString::number(xPixelsPerMeter));
+    infoTextEdit->append("Y pixels per meter: " + QString::number(yPixelsPerMeter));
+    infoTextEdit->append("Colors used: " + QString::number(colorsUsed));
+    infoTextEdit->append("Important colors: " + QString::number(importantColors));
+
+    // --- Barevná paleta ---
+    int paletteSize = 0;
+    if (bitsPerPixel == 1) paletteSize = 2;
+    else if (bitsPerPixel == 4) paletteSize = 16;
+    else if (bitsPerPixel == 8) paletteSize = 256;
+
+    if (paletteSize > 0) {
+        infoTextEdit->append("Palette (" + QString::number(paletteSize) + " colors):");
+        for (int i = 0; i < paletteSize; i++) {
+            int offset = 14 + dibHeaderSize + i * 4;
+            if (offset + 3 >= bmpData.size()) break;
+            auto blue = static_cast<quint8>(bmpData[offset]);
+            auto green = static_cast<quint8>(bmpData[offset + 1]);
+            auto red = static_cast<quint8>(bmpData[offset + 2]);
+            infoTextEdit->append(QString("Color %1: R=%2, G=%3, B=%4")
+                                 .arg(i)
+                                 .arg(red)
+                                 .arg(green)
+                                 .arg(blue));
+        }
+    } else if (bitsPerPixel == 24) {
+        infoTextEdit->append("No palette (24-bit true color).");
+    } else {
+        infoTextEdit->append("Unknown or unsupported palette configuration.");
+    }
+
+    infoTextEdit->append("========================");
+}
+
 // Pomocná funkce pro čtení dat z BMP souboru
 bool MainWindow::loadBMPFile(const QString &filePath) {
     QFile file(filePath);
@@ -306,11 +391,14 @@ void MainWindow::renderCustomBMP() {
     imageLabel->setPixmap(QPixmap::fromImage(renderedImage));
     image = renderedImage;  // Uložení do proměnné image pro další úpravy
 
+    // use parseBMPHeader to display BMP header information
+    parseBMPHeader(customBMPData);
+
     // Aktualizace informací o obrázku
-    infoTextEdit->clear();
-    infoTextEdit->append("Image Info:");
-    infoTextEdit->append("Width: " + QString::number(customBMPWidth));
-    infoTextEdit->append("Height: " + QString::number(customBMPHeight));
-    infoTextEdit->append("Bits per pixel: " + QString::number(customBMPBitsPerPixel));
-    infoTextEdit->append("Format: BMP");
+    // infoTextEdit->clear();
+    // infoTextEdit->append("Image Info:");
+    // infoTextEdit->append("Width: " + QString::number(customBMPWidth));
+    // infoTextEdit->append("Height: " + QString::number(customBMPHeight));
+    // infoTextEdit->append("Bits per pixel: " + QString::number(customBMPBitsPerPixel));
+    // infoTextEdit->append("Format: BMP");
 }

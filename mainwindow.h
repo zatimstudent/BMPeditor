@@ -43,10 +43,13 @@ private:
     bool loadCustomBMP(const QString &fileName);
 
     void updateImageInfo();
+    void parseBMPHeader(const QByteArray &bmpData);
+
 
 bool loadBMPFile(const QString &filePath);
 
 void createMenuBar(); // Funkce pro vytvoření menu
+
 
 };
 

@@ -14,7 +14,9 @@ find_package(Qt5 COMPONENTS
         Widgets
         REQUIRED)
 
-add_executable(untitled2 main.cpp mainwindow.cpp mainwindow.h mainwindow.ui)
+add_executable(untitled2 main.cpp mainwindow.cpp mainwindow.h mainwindow.ui
+        customimagewidget.cpp
+        customimagewidget.h)
 target_link_libraries(untitled2
         Qt5::Core
         Qt5::Gui

@@ -10,10 +10,14 @@
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QFileInfo>
+#include <QWidget>
+#include <QPaintEvent>
+
+#include "customimagewidget.h"
 
 class MainWindow : public QMainWindow
 {
-Q_OBJECT
+    Q_OBJECT
 
 public:
     MainWindow(QWidget *parent = nullptr);
@@ -27,7 +31,7 @@ private slots:
     void flipImage();
 
 private:
-    QLabel *imageLabel;
+    CustomImageWidget *imageWidget;
     QTextEdit *infoTextEdit;
     QImage image;
     QString filePath;  // Uchování cesty k souboru
@@ -67,11 +71,8 @@ private:
     void renderCustomBMP();
     bool loadCustomBMP(const QString &fileName);
     void updateImageInfo();
-
-bool loadBMPFile(const QString &filePath);
-
-void createMenuBar(); // Funkce pro vytvoření menu
-
+    bool loadBMPFile(const QString &filePath);
+    void createMenuBar(); // Funkce pro vytvoření menu
 };
 
 #endif // MAINWINDOW_H

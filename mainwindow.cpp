@@ -7,6 +7,7 @@
 #include <QMenuBar>
 #include <QAction>
 #include <QFileDialog>
+#include <QPainter>
 
 MainWindow::MainWindow(QWidget *parent)
         : QMainWindow(parent)
@@ -35,9 +36,16 @@ MainWindow::MainWindow(QWidget *parent)
 
     mainLayout->addLayout(buttonLayout);
 
-    imageLabel = new QLabel(this);
-    imageLabel->setAlignment(Qt::AlignCenter);
-    mainLayout->addWidget(imageLabel);
+    // imageWidget = new CustomImageWidget(this);
+    // imageWidget->setAlignment(Qt::AlignCenter);
+    // mainLayout->addWidget(imageWidget);
+
+    imageWidget = new CustomImageWidget(this);
+    QHBoxLayout *centeringLayout = new QHBoxLayout();
+    centeringLayout->addStretch();
+    centeringLayout->addWidget(imageWidget);
+    centeringLayout->addStretch();
+    mainLayout->addLayout(centeringLayout);
 
     infoTextEdit = new QTextEdit(this);
     infoTextEdit->setReadOnly(true);
@@ -110,21 +118,24 @@ void MainWindow::invertColors() {
             image.setPixelColor(x, y, color);
         }
     }
-    imageLabel->setPixmap(QPixmap::fromImage(image));
+
+    imageWidget->setImage(image);
 }
 
 void MainWindow::rotateImage() {
     if (image.isNull()) return;
 
     image = image.transformed(QTransform().rotate(90));
-    imageLabel->setPixmap(QPixmap::fromImage(image));
+    imageWidget->setImage(image);
 }
 
 void MainWindow::flipImage() {
     if (image.isNull()) return;
 
     image = image.mirrored(true, false);
-    imageLabel->setPixmap(QPixmap::fromImage(image));
+    imageWidget->setImage(image);
+
+
 
 }
 
@@ -367,8 +378,8 @@ void MainWindow::renderCustomBMP() {
     }
 
     // Nastavení vykresleného obrázku
-    imageLabel->setPixmap(QPixmap::fromImage(renderedImage));
-    image = renderedImage;  // Uložení do proměnné image pro další úpravy
+    imageWidget->setImage(renderedImage);
+    image = renderedImage;
 
     // Aktualizace informací o obrázku
     updateImageInfo();

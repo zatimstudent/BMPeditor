@@ -122,6 +122,14 @@ void MainWindow::createMenuBar() {
     QAction *openAction = new QAction(tr("Otevřít"), this);
     QAction *saveAction = new QAction(tr("Uložit"), this);
 
+    // Přidání klávesových zkratek
+    openAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_O));
+    saveAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_S));
+
+    // Přidání tooltipů
+    openAction->setToolTip(tr("Otevřít obrázek (Ctrl+O)"));
+    saveAction->setToolTip(tr("Uložit obrázek (Ctrl+S)"));
+
     // Připojení akcí na sloty
     connect(openAction, &QAction::triggered, this, &MainWindow::openImage);
     connect(saveAction, &QAction::triggered, this, &MainWindow::saveImage);

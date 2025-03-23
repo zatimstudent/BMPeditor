@@ -10,6 +10,12 @@
 #include <QFileDialog>
 #include <QPainter>
 
+
+#include "styles.h"
+#include "Filters/FlipFilter.h"
+#include "Filters/InvertFilter.h"
+#include "Filters/RotateFilter.h"
+
 MainWindow::MainWindow(QWidget *parent)
         : QMainWindow(parent), imageModified(false)
 {
@@ -27,19 +33,35 @@ MainWindow::MainWindow(QWidget *parent)
     QVBoxLayout *leftLayout = new QVBoxLayout();
 
     // Tlačítka pro úpravy
-    QPushButton *invertButton = new QPushButton("Invert Colors", this);
-    QPushButton *rotateButton = new QPushButton("Rotate 90°", this);
-    QPushButton *flipButton = new QPushButton("Flip Horizontal", this);
+    filters.push_back(std::make_unique<InvertFilter>());
+    filters.push_back(std::make_unique<RotateFilter>());
+    filters.push_back(std::make_unique<FlipFilter>());
 
-    connect(invertButton, &QPushButton::clicked, this, &MainWindow::invertColors);
-    connect(rotateButton, &QPushButton::clicked, this, &MainWindow::rotateImage);
-    connect(flipButton, &QPushButton::clicked, this, &MainWindow::flipImage);
-
+    // Vytvoření tlačítek pro filtry dynamicky
     QHBoxLayout *buttonLayout = new QHBoxLayout();
-    buttonLayout->addWidget(invertButton);
-    buttonLayout->addWidget(rotateButton);
-    buttonLayout->addWidget(flipButton);
+    for (const auto& filter : filters) {
+        QPushButton *button = new QPushButton(filter->name(), this);
+        button->setStyleSheet(Styles::ButtonStyle);  // Aplikace stylu na tlačítko
+        buttonLayout->addWidget(button);
 
+        connect(button, &QPushButton::clicked, [this, &filter]() {
+            if (image.isNull()) return;
+            image = filter->apply(image);
+            imageWidget->setImage(image);
+            imageModified = true;
+
+            // Aktualizace velikosti (pro případ, že filtr změní rozměry)
+            customBMPWidth = image.width();
+            customBMPHeight = image.height();
+        });
+    }
+
+    // Nastavení vlastností layoutu pro zarovnání tlačítek
+    buttonLayout->setSpacing(10);  // Mezera mezi tlačítky
+    buttonLayout->setContentsMargins(10, 10, 10, 10);  // Okraje kolem tlačítek
+    buttonLayout->setAlignment(Qt::AlignCenter);  // Zarovnání na střed
+
+    // Přidání layoutu tlačítek do hlavního layoutu
     leftLayout->addLayout(buttonLayout);
 
     // Widget pro zobrazení obrázku
@@ -56,36 +78,7 @@ MainWindow::MainWindow(QWidget *parent)
     infoTextEdit->setMaximumWidth(350);
 
     // Nastavení stylu pro panel s informacemi
-    infoTextEdit->setStyleSheet(
-        "QTextEdit {"
-        "  background-color: #f5f5f5;"
-        "  border: 1px solid #ddd;"
-        "  border-radius: 4px;"
-        "  padding: 8px;"
-        "  font-family: monospace;"
-        "}"
-    );
-
-    // Stylizace tlačítek
-    QString buttonStyle =
-        "QPushButton {"
-        "  background-color: #3498db;"
-        "  color: white;"
-        "  border: none;"
-        "  padding: 8px 16px;"
-        "  border-radius: 4px;"
-        "  font-weight: bold;"
-        "}"
-        "QPushButton:hover {"
-        "  background-color: #2980b9;"
-        "}"
-        "QPushButton:pressed {"
-        "  background-color: #1f6dad;"
-        "}";
-
-    invertButton->setStyleSheet(buttonStyle);
-    rotateButton->setStyleSheet(buttonStyle);
-    flipButton->setStyleSheet(buttonStyle);
+    infoTextEdit->setStyleSheet(Styles::InfoHeaderStyle);
 
     // Přidání pravé části do hlavního layoutu
     mainLayout->addWidget(infoTextEdit, 1);  // 1 = 25% šířky
@@ -93,17 +86,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Přidání záhlaví pro panel s informacemi
     QVBoxLayout *rightLayout = new QVBoxLayout();
     QLabel *infoHeaderLabel = new QLabel("Image Information", this);
-    infoHeaderLabel->setStyleSheet(
-        "QLabel {"
-        "  font-weight: bold;"
-        "  font-size: 14px;"
-        "  padding: 5px;"
-        "  border-bottom: 1px solid #ddd;"
-        "}"
-    );
+    infoHeaderLabel->setStyleSheet(Styles::InfoPanelStyle);
     rightLayout->addWidget(infoHeaderLabel);
     rightLayout->addWidget(infoTextEdit);
-    mainLayout->addLayout(rightLayout, 1);  // Místo přímého přidání infoTextEdit
+    mainLayout->addLayout(rightLayout, 1);
 
     // Vytvoření menu
     createMenuBar();
@@ -371,42 +357,6 @@ void MainWindow::saveImage() {
     }
 
     file.close();
-}
-
-void MainWindow::invertColors() {
-    if (image.isNull()) return;
-
-    for (int y = 0; y < image.height(); ++y) {
-        for (int x = 0; x < image.width(); ++x) {
-            QColor color = image.pixelColor(x, y);
-            color.setRed(255 - color.red());
-            color.setGreen(255 - color.green());
-            color.setBlue(255 - color.blue());
-            image.setPixelColor(x, y, color);
-        }
-    }
-
-    imageWidget->setImage(image);
-    imageModified = true;  // Označení, že obrázek byl modifikován
-
-}
-
-void MainWindow::rotateImage() {
-    if (image.isNull()) return;
-
-    image = image.transformed(QTransform().rotate(90));
-    imageWidget->setImage(image);
-    imageModified = true;  // Označení, že obrázek byl modifikován
-
-}
-
-void MainWindow::flipImage() {
-    if (image.isNull()) return;
-
-    image = image.mirrored(true, false);
-    imageWidget->setImage(image);
-    imageModified = true;  // Označení, že obrázek byl modifikován
-
 }
 
 void MainWindow::updateImageInfo() {

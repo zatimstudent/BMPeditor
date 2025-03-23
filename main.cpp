@@ -8,9 +8,6 @@ int main(int argc, char *argv[]) {
     // Vytvoření instance MainWindow
     MainWindow window;
 
-    // Nastavení velikosti okna
-    window.resize(800, 600);
-
     // Zobrazení okna
     window.show();
 

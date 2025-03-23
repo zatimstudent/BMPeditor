@@ -14,6 +14,7 @@
 #include <QPaintEvent>
 
 #include "customimagewidget.h"
+#include "Filters/Filter.h"
 
 class MainWindow : public QMainWindow
 {
@@ -24,11 +25,8 @@ public:
     ~MainWindow();
 
 private slots:
-    void openImage();      // Slot pro otevření obrázku
-    void saveImage();      // Slot pro uložení obrázku
-    void invertColors();
-    void rotateImage();
-    void flipImage();
+    void openImage();
+    void saveImage();
 
 private:
     CustomImageWidget *imageWidget;
@@ -36,6 +34,8 @@ private:
     QImage image;
     QString filePath;  // Uchování cesty k souboru
     bool imageModified;
+    std::vector<std::unique_ptr<Filter>> filters;
+
 
     // Proměnné pro vlastní vykreslování BMP souboru
     QByteArray customBMPData;

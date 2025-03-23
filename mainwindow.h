@@ -36,8 +36,6 @@ private:
     QImage image;
     QString filePath;  // Uchování cesty k souboru
     bool imageModified;
-    QImage originalImage;  // Přidána proměnná pro uchování původního obrázku
-
 
     // Proměnné pro vlastní vykreslování BMP souboru
     QByteArray customBMPData;

@@ -1,6 +1,6 @@
 #include "InvertFilter.h"
 
-QImage InvertFilter::apply(const QImage& image) {
+QImage InvertFilter::apply(const QImage& image) const {
     if (image.isNull()) return image;
 
     QImage result = image.copy();

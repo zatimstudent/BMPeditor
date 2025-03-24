@@ -5,7 +5,7 @@
 
 class RotateFilter : public Filter {
 public:
-    QImage apply(const QImage& image) override;
+    QImage apply(const QImage& image) const override;
     QString name() const override { return "Rotate 90°"; }
 };
 

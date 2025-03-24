@@ -25,7 +25,10 @@ add_executable(untitled2 main.cpp mainwindow.cpp mainwindow.h mainwindow.ui
         Filters/RotateFilter.h
         Filters/FlipFilter.cpp
         Filters/FlipFilter.h
-        styles.h)
+        styles.h
+        Image.cpp
+        Image.h
+)
 target_link_libraries(untitled2
         Qt5::Core
         Qt5::Gui

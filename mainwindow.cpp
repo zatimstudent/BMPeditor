@@ -81,10 +81,42 @@ MainWindow::MainWindow(QWidget *parent)
     // Přidání záhlaví pro panel s informacemi
     QVBoxLayout *rightLayout = new QVBoxLayout();
     QLabel *infoHeaderLabel = new QLabel("Image Information", this);
-    infoHeaderLabel->setStyleSheet(Styles::InfoPanelStyle);
+    infoHeaderLabel->setStyleSheet(Styles::InfoHeaderStyle);
     rightLayout->addWidget(infoHeaderLabel);
     rightLayout->addWidget(infoTextEdit);
-    mainLayout->addLayout(rightLayout, 1);
+
+    // Přidání tlačítek pro zoom pod informačním panelem
+    QHBoxLayout *zoomLayout = new QHBoxLayout();
+    QPushButton *zoomInButton = new QPushButton("+", this);
+    QPushButton *zoomOutButton = new QPushButton("-", this);
+    QPushButton *zoomResetButton = new QPushButton("reset", this);
+
+    // Nastavení stylu pro tlačítka zoomu
+    zoomInButton->setStyleSheet(Styles::ButtonStyle);
+    zoomOutButton->setStyleSheet(Styles::ButtonStyle);
+    zoomResetButton->setStyleSheet(Styles::ButtonStyle);
+
+    // Připojení signálů
+    connect(zoomInButton, &QPushButton::clicked, [this]() {
+        imageWidget->zoomIn();
+    });
+    connect(zoomOutButton, &QPushButton::clicked, [this]() {
+        imageWidget->zoomOut();
+    });
+    connect(zoomResetButton, &QPushButton::clicked, [this]() {
+        imageWidget->resetZoom();
+    });
+
+    // Přidání tlačítek do layoutu
+    zoomLayout->addWidget(zoomInButton);
+    zoomLayout->addWidget(zoomResetButton);
+    zoomLayout->addWidget(zoomOutButton);
+
+    // Přidání layoutu s tlačítky pro zoom do pravého panelu
+    rightLayout->addLayout(zoomLayout);
+
+    // Přidání pravé části do hlavního layoutu
+    mainLayout->addLayout(rightLayout, 1);  // 1 = 25% šířky
 
     // Vytvoření menu
     createMenuBar();
@@ -184,6 +216,7 @@ void MainWindow::saveImage() {
 
 void MainWindow::updateUI() {
     if (!currentImage.isEmpty()) {
+        imageWidget->resetZoom();
         imageWidget->setImage(currentImage.toQImage());
         updateImageInfo();
     }

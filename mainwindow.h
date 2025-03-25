@@ -13,7 +13,6 @@
 #include <QWidget>
 #include <QPaintEvent>
 #include <vector>
-#include <memory>
 
 #include "customimagewidget.h"
 #include "Filters/Filter.h"

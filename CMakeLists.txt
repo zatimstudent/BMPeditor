@@ -17,7 +17,6 @@ find_package(Qt5 COMPONENTS
 add_executable(untitled2 main.cpp mainwindow.cpp mainwindow.h mainwindow.ui
         customimagewidget.cpp
         customimagewidget.h
-        Filters/Filter.cpp
         Filters/Filter.h
         Filters/InvertFilter.cpp
         Filters/InvertFilter.h

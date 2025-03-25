@@ -17,7 +17,7 @@
 #include "Filters/RotateFilter.h"
 
 MainWindow::MainWindow(QWidget *parent)
-        : QMainWindow(parent), imageModified(false)
+        : QMainWindow(parent)
 {
     setWindowTitle("Image Editor");
     setGeometry(100, 100, 950, 600);
@@ -45,15 +45,10 @@ MainWindow::MainWindow(QWidget *parent)
         buttonLayout->addWidget(button);
 
         connect(button, &QPushButton::clicked, [this, &filter]() {
-            if (image.isNull()) return;
-            image = filter->apply(image);
-            imageWidget->setImage(image);
-            imageModified = true;
-
-            // Aktualizace velikosti (pro případ, že filtr změní rozměry)
-            customBMPWidth = image.width();
-            customBMPHeight = image.height();
-        });
+            if (currentImage.isEmpty()) return;
+            currentImage.applyFilter(*filter);
+            updateUI();
+});
     }
 
     // Nastavení vlastností layoutu pro zarovnání tlačítek
@@ -135,18 +130,16 @@ void MainWindow::openImage() {
     QString fileName = QFileDialog::getOpenFileName(this, tr("Open Image"), "", tr("Images (*.bmp)"));
     if (fileName.isEmpty()) return;
 
-    // Použití vlastní implementace pro načtení BMP souboru
-    if (!loadBMPFile(fileName)) {
-        return;
+    if (currentImage.loadFromFile(fileName)) {
+        filePath = fileName;
+        updateUI();
+    } else {
+        QMessageBox::warning(this, tr("Error"), tr("Nelze otevřít soubor!"));
     }
-
-    filePath = fileName;
-    // Použití vlastní implementace pro vykreslení BMP souboru
-    renderCustomBMP();
 }
 
 void MainWindow::saveImage() {
-    if (image.isNull()) {
+    if (currentImage.isEmpty()) {
         QMessageBox::warning(this, tr("Error"), tr("No image to save!"));
         return;
     }
@@ -157,7 +150,7 @@ void MainWindow::saveImage() {
     bool useCopyMethod = false;
 
     // Pokud obrázek nebyl modifikován, nabídneme možnost prostého kopírování
-    if (!imageModified) {
+    if (!currentImage.isModified()) {
         QMessageBox::StandardButton reply;
         reply = QMessageBox::question(this, tr("Způsob uložení"),
             tr("Obrázek nebyl modifikován. Chcete jej uložit kopírováním původního souboru?\n\n"
@@ -181,195 +174,36 @@ void MainWindow::saveImage() {
         }
     }
 
-    // Implementace pro uložení obrázku se zachováním původní struktury
-    QFile file(fileName);
-    if (!file.open(QIODevice::WriteOnly)) {
-        QMessageBox::warning(this, tr("Error"), tr("Nelze vytvořit soubor!"));
-        return;
-    }
-
-    std::cout << "Saving image to: " << fileName.toStdString() << std::endl;
-
-    // 1. Zápis file header (14 bajtů)
-    file.write(bmpFileHeader.bfType, 2);
-    file.write(reinterpret_cast<char*>(&bmpFileHeader.bfSize), 4);
-    file.write(reinterpret_cast<char*>(&bmpFileHeader.bfReserved1), 2);
-    file.write(reinterpret_cast<char*>(&bmpFileHeader.bfReserved2), 2);
-    file.write(reinterpret_cast<char*>(&bmpFileHeader.bfOffBits), 4);
-
-    // 2. Zápis info header (40 bajtů)
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biSize), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biWidth), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biHeight), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biPlanes), 2);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biBitCount), 2);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biCompression), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biSizeImage), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biXPelsPerMeter), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biYPelsPerMeter), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biClrUsed), 4);
-    file.write(reinterpret_cast<char*>(&bmpInfoHeader.biClrImportant), 4);
-
-    // 3. Zápis palety barev (pokud existuje)
-    if (customBMPBitsPerPixel <= 8 && !customBMPPalette.isEmpty()) {
-        for (QRgb color : customBMPPalette) {
-            char paletteEntry[4];
-            paletteEntry[0] = static_cast<char>(qBlue(color));  // B
-            paletteEntry[1] = static_cast<char>(qGreen(color)); // G
-            paletteEntry[2] = static_cast<char>(qRed(color));   // R
-            paletteEntry[3] = 0; // Reserved
-            file.write(paletteEntry, 4);
-        }
-    }
-
-    // 4. Zápis obrazových dat
-    if (imageModified) {
-        std::cout << "Writing modified image data..." << std::endl;
-        // Výpočet velikosti řádku (musí být zarovnán na 4 bajty)
-        int bytesPerRow = ((customBMPWidth * customBMPBitsPerPixel + 31) / 32) * 4;
-        QByteArray dataToSave(bytesPerRow * customBMPHeight, 0);
-
-        // Konverze pixelů z upraveného QImage zpět do formátu BMP
-        for (int y = 0; y < image.height(); y++) {
-            for (int x = 0; x < image.width(); x++) {
-                QRgb pixel = image.pixel(x, y);
-
-                // Pozice v datech (BMP ukládá data odspodu nahoru, pokud biHeight > 0)
-                int row = (bmpInfoHeader.biHeight > 0) ? customBMPHeight - 1 - y : y;
-                int byteIndex = row * bytesPerRow;
-
-                if (customBMPBitsPerPixel == 24) {
-                    // 24 bitů = 3 bajty na pixel
-                    int index = byteIndex + x * 3;
-                    if (index + 2 < dataToSave.size()) {
-                        dataToSave[index] = static_cast<char>(qBlue(pixel));
-                        dataToSave[index + 1] = static_cast<char>(qGreen(pixel));
-                        dataToSave[index + 2] = static_cast<char>(qRed(pixel));
-                    }
-                }
-                else if (customBMPBitsPerPixel == 8) {
-                    // 8 bitů = 1 bajt na pixel
-                    int index = byteIndex + x;
-                    if (index < dataToSave.size()) {
-                        // Nalezení nejbližší barvy v paletě
-                        QRgb currentPixel = pixel;
-                        int bestMatch = 0;
-                        int bestDiff = INT_MAX;
-
-                        for (int i = 0; i < customBMPPalette.size(); i++) {
-                            QRgb paletteColor = customBMPPalette[i];
-                            int rDiff = qRed(currentPixel) - qRed(paletteColor);
-                            int gDiff = qGreen(currentPixel) - qGreen(paletteColor);
-                            int bDiff = qBlue(currentPixel) - qBlue(paletteColor);
-
-                            // Výpočet vzdálenosti v RGB prostoru
-                            int diff = rDiff * rDiff + gDiff * gDiff + bDiff * bDiff;
-
-                            if (diff < bestDiff) {
-                                bestDiff = diff;
-                                bestMatch = i;
-                            }
-                        }
-
-                        dataToSave[index] = static_cast<char>(bestMatch);
-                    }
-                }
-                else if (customBMPBitsPerPixel == 4) {
-                    // 4 bity = 2 pixely na bajt
-                    int bytePos = byteIndex + x / 2;
-                    if (bytePos < dataToSave.size()) {
-                        // Nalezení nejbližší barvy v paletě
-                        QRgb currentPixel = pixel;
-                        int bestMatch = 0;
-                        int bestDiff = INT_MAX;
-
-                        for (int i = 0; i < customBMPPalette.size() && i < 16; i++) {
-                            QRgb paletteColor = customBMPPalette[i];
-                            int rDiff = qRed(currentPixel) - qRed(paletteColor);
-                            int gDiff = qGreen(currentPixel) - qGreen(paletteColor);
-                            int bDiff = qBlue(currentPixel) - qBlue(paletteColor);
-
-                            int diff = rDiff * rDiff + gDiff * gDiff + bDiff * bDiff;
-
-                            if (diff < bestDiff) {
-                                bestDiff = diff;
-                                bestMatch = i;
-                            }
-                        }
-
-                        // Aktualizace hodnoty v bajtu
-                        if (x % 2 == 0) {
-                            // Horní 4 bity (první pixel v bajtu)
-                            dataToSave[bytePos] = (dataToSave[bytePos] & 0x0F) | (bestMatch << 4);
-                        } else {
-                            // Dolní 4 bity (druhý pixel v bajtu)
-                            dataToSave[bytePos] = (dataToSave[bytePos] & 0xF0) | bestMatch;
-                        }
-                    }
-                }
-                else if (customBMPBitsPerPixel == 1) {
-                    // 1 bit = 8 pixelů na bajt
-                    int bytePos = byteIndex + x / 8;
-                    if (bytePos < dataToSave.size()) {
-                        // Pro 1-bitový obrázek máme jen 2 barvy (obvykle černá a bílá)
-                        QRgb currentPixel = pixel;
-                        int bestMatch = 0;
-
-                        // Máme jen dvě barvy, takže stačí porovnat s první
-                        if (customBMPPalette.size() >= 2) {
-                            QRgb color0 = customBMPPalette[0];
-                            QRgb color1 = customBMPPalette[1];
-
-                            int rDiff0 = qRed(currentPixel) - qRed(color0);
-                            int gDiff0 = qGreen(currentPixel) - qGreen(color0);
-                            int bDiff0 = qBlue(currentPixel) - qBlue(color0);
-
-                            int rDiff1 = qRed(currentPixel) - qRed(color1);
-                            int gDiff1 = qGreen(currentPixel) - qGreen(color1);
-                            int bDiff1 = qBlue(currentPixel) - qBlue(color1);
-
-                            int diff0 = rDiff0 * rDiff0 + gDiff0 * gDiff0 + bDiff0 * bDiff0;
-                            int diff1 = rDiff1 * rDiff1 + gDiff1 * gDiff1 + bDiff1 * bDiff1;
-
-                            bestMatch = (diff1 < diff0) ? 1 : 0;
-                        }
-
-                        // Určíme, který bit v bajtu aktualizujeme
-                        int bitPos = 7 - (x % 8); // 7, 6, 5, 4, 3, 2, 1, 0
-
-                        unsigned char currentByte = static_cast<unsigned char>(dataToSave[bytePos]);
-                        if (bestMatch == 0) {
-                            // Nastavíme bit na 0
-                            currentByte &= ~(1 << bitPos);
-                        } else {
-                            // Nastavíme bit na 1
-                            currentByte |= (1 << bitPos);
-                        }
-                        dataToSave[bytePos] = static_cast<char>(currentByte);
-                    }
-                }
-            }
-        }
-        file.write(dataToSave);
+    // Použití metody třídy Image pro uložení souboru
+    if (currentImage.saveToFile(fileName)) {
+        std::cout << "Image saved successfully to: " << fileName.toStdString() << std::endl;
     } else {
-        std::cout << "Writing original image data..." << std::endl;
-        file.write(customBMPData);
+        QMessageBox::warning(this, tr("Error"), tr("Failed to save the image!"));
     }
+}
 
-    file.close();
+void MainWindow::updateUI() {
+    if (!currentImage.isEmpty()) {
+        imageWidget->setImage(currentImage.toQImage());
+        updateImageInfo();
+    }
 }
 
 void MainWindow::updateImageInfo() {
-    if (filePath.isEmpty()) return;
+    if (filePath.isEmpty() || currentImage.isEmpty()) return;
 
     QFileInfo fileInfo(filePath);
     infoTextEdit->clear();
     infoTextEdit->append("Image Info:");
     infoTextEdit->append("File Path: " + filePath);
-    infoTextEdit->append("Width: " + QString::number(image.width()));
-    infoTextEdit->append("Height: " + QString::number(image.height()));
+    infoTextEdit->append("Width: " + QString::number(currentImage.width()));
+    infoTextEdit->append("Height: " + QString::number(currentImage.height()));
     infoTextEdit->append("Size: " + QString::number(fileInfo.size()) + " bytes");
-    infoTextEdit->append("Format: " + QString::number(customBMPBitsPerPixel) + "-bit BMP");
+    infoTextEdit->append("Format: " + QString::number(currentImage.bitsPerPixel()) + "-bit BMP");
+
+    // Získání BMP header dat z objektu Image
+    const Image::BMPFileHeader& bmpFileHeader = currentImage.getFileHeader();
+    const Image::BMPInfoHeader& bmpInfoHeader = currentImage.getInfoHeader();
 
     infoTextEdit->append("\nBMP File Header:");
     infoTextEdit->append("bfType: " + QString(bmpFileHeader.bfType[0]) + QString(bmpFileHeader.bfType[1]));
@@ -385,7 +219,7 @@ void MainWindow::updateImageInfo() {
     infoTextEdit->append("biPlanes: " + QString::number(bmpInfoHeader.biPlanes));
     infoTextEdit->append("biBitCount: " + QString::number(bmpInfoHeader.biBitCount) + " bits");
 
-    // Výpis typu komprese i když náš use case je vždy nekomprimovaný BMP
+    // Výpis typu komprese
     QString compressionType;
     switch(bmpInfoHeader.biCompression) {
         case 0: compressionType = "BI_RGB (0) - nekomprimovaný"; break;
@@ -403,15 +237,17 @@ void MainWindow::updateImageInfo() {
     infoTextEdit->append("biClrImportant: " + QString::number(bmpInfoHeader.biClrImportant));
 
     // Pro obrázky s paletou vypíšeme informace o paletě
-    if (customBMPBitsPerPixel <= 8) {
+    if (currentImage.bitsPerPixel() <= 8) {
+        const QVector<QRgb>& palette = currentImage.palette();
+
         infoTextEdit->append("\nPalette Info:");
-        infoTextEdit->append("Palette Size: " + QString::number(customBMPPalette.size()) + " colors");
+        infoTextEdit->append("Palette Size: " + QString::number(palette.size()) + " colors");
 
         // Pro menší palety můžeme vypsat i barvy
-        if (customBMPPalette.size() <= 256) {
+        if (palette.size() <= 256) {
             infoTextEdit->append("\nPalette Colors (RGB):");
-            for (int i = 0; i < customBMPPalette.size(); i++) {
-                QRgb color = customBMPPalette[i];
+            for (int i = 0; i < palette.size(); i++) {
+                QRgb color = palette[i];
                 QString colorStr = QString("Color %1: R=%2, G=%3, B=%4")
                     .arg(i, 2, 10, QChar('0'))
                     .arg(qRed(color), 3, 10, QChar('0'))
@@ -421,187 +257,4 @@ void MainWindow::updateImageInfo() {
             }
         }
     }
-}
-
-// Pomocná funkce pro čtení dat z BMP souboru
-bool MainWindow::loadBMPFile(const QString &filePath) {
-    QFile file(filePath);
-    if (!file.open(QIODevice::ReadOnly)) {
-        QMessageBox::warning(this, tr("Error"), tr("Nelze otevřít soubor!"));
-        return false;
-    }
-
-    // Čtení kompletní BMP hlavičky
-    // Načtení file header (14 bajtů)
-    QByteArray fileHeaderData = file.read(14);
-    if (fileHeaderData.size() < 14) {
-        QMessageBox::warning(this, tr("Error"), tr("Neplatný formát BMP - příliš krátká hlavička!"));
-        file.close();
-        return false;
-    }
-
-    // Kontrola signatury "BM"
-    if (fileHeaderData[0] != 'B' || fileHeaderData[1] != 'M') {
-        QMessageBox::warning(this, tr("Error"), tr("Neplatný formát BMP - chybí signatura BM!"));
-        file.close();
-        return false;
-    }
-
-    // Naplnění file header struktury
-    bmpFileHeader.bfType[0] = fileHeaderData[0];
-    bmpFileHeader.bfType[1] = fileHeaderData[1];
-    bmpFileHeader.bfSize = *reinterpret_cast<const uint32_t*>(fileHeaderData.data() + 2);
-    bmpFileHeader.bfReserved1 = *reinterpret_cast<const uint16_t*>(fileHeaderData.data() + 6);
-    bmpFileHeader.bfReserved2 = *reinterpret_cast<const uint16_t*>(fileHeaderData.data() + 8);
-    bmpFileHeader.bfOffBits = *reinterpret_cast<const uint32_t*>(fileHeaderData.data() + 10);
-
-    // Načtení info header (40 bajtů pro BITMAPINFOHEADER)
-    QByteArray infoHeaderData = file.read(40);
-    if (infoHeaderData.size() < 40) {
-        QMessageBox::warning(this, tr("Error"), tr("Neplatný formát BMP - příliš krátká info hlavička!"));
-        file.close();
-        return false;
-    }
-
-    // Naplnění info header struktury
-    bmpInfoHeader.biSize = *reinterpret_cast<const uint32_t*>(infoHeaderData.data() + 0);
-    bmpInfoHeader.biWidth = *reinterpret_cast<const int32_t*>(infoHeaderData.data() + 4);
-    bmpInfoHeader.biHeight = *reinterpret_cast<const int32_t*>(infoHeaderData.data() + 8);
-    bmpInfoHeader.biPlanes = *reinterpret_cast<const uint16_t*>(infoHeaderData.data() + 12);
-    bmpInfoHeader.biBitCount = *reinterpret_cast<const uint16_t*>(infoHeaderData.data() + 14);
-    bmpInfoHeader.biCompression = *reinterpret_cast<const uint32_t*>(infoHeaderData.data() + 16);
-    bmpInfoHeader.biSizeImage = *reinterpret_cast<const uint32_t*>(infoHeaderData.data() + 20);
-    bmpInfoHeader.biXPelsPerMeter = *reinterpret_cast<const int32_t*>(infoHeaderData.data() + 24);
-    bmpInfoHeader.biYPelsPerMeter = *reinterpret_cast<const int32_t*>(infoHeaderData.data() + 28);
-    bmpInfoHeader.biClrUsed = *reinterpret_cast<const uint32_t*>(infoHeaderData.data() + 32);
-    bmpInfoHeader.biClrImportant = *reinterpret_cast<const uint32_t*>(infoHeaderData.data() + 36);
-
-    // Kontrola podporovaných formátů
-    if (bmpInfoHeader.biCompression != 0) {
-        QMessageBox::warning(this, tr("Error"), tr("Komprimované BMP soubory nejsou podporovány!"));
-        file.close();
-        return false;
-    }
-
-    if (bmpInfoHeader.biBitCount != 1 && bmpInfoHeader.biBitCount != 4 &&
-        bmpInfoHeader.biBitCount != 8 && bmpInfoHeader.biBitCount != 24) {
-        QMessageBox::warning(this, tr("Error"), tr("Nepodporovaná bitová hloubka!"));
-        file.close();
-        return false;
-    }
-
-    // Nastavení velikosti obrázku
-    customBMPWidth = bmpInfoHeader.biWidth;
-    customBMPHeight = abs(bmpInfoHeader.biHeight); // Výška může být záporná, pokud data jdou odshora dolů
-    customBMPBitsPerPixel = bmpInfoHeader.biBitCount;
-
-    // Čtení palety barev (pro 1, 4 a 8 bitové obrázky)
-    customBMPPalette.clear();
-    if (customBMPBitsPerPixel <= 8) {
-        // Zjištění velikosti palety - pokud biClrUsed je 0, použij maximální počet barev
-        int paletteSize = (bmpInfoHeader.biClrUsed > 0) ? bmpInfoHeader.biClrUsed : (1 << customBMPBitsPerPixel);
-
-        // Načtení palety
-        QByteArray paletteData = file.read(paletteSize * 4);  // 4 bajty na barvu (BGRA)
-
-        for (int i = 0; i < paletteSize && i*4 < paletteData.size(); i++) {
-            int blue = static_cast<unsigned char>(paletteData[i*4]);
-            int green = static_cast<unsigned char>(paletteData[i*4+1]);
-            int red = static_cast<unsigned char>(paletteData[i*4+2]);
-            customBMPPalette.append(qRgb(red, green, blue));
-        }
-    }
-
-    // Posun na začátek obrazových dat
-    file.seek(bmpFileHeader.bfOffBits);
-
-    // Čtení dat obrázku
-    customBMPData = file.readAll();
-    file.close();
-
-    return true;
-}
-
-// Vlastní vykreslování BMP souboru
-void MainWindow::renderCustomBMP() {
-    if (customBMPData.isEmpty()) return;
-
-    // Vytvoření prázdného obrázku
-    QImage renderedImage(customBMPWidth, customBMPHeight, QImage::Format_RGB32);
-
-    // Výpočet velikosti řádku (musí být zarovnán na 4 bajty)
-    int bytesPerRow = ((customBMPWidth * customBMPBitsPerPixel + 31) / 32) * 4;
-
-    // Vykreslení podle bitové hloubky
-    for (int y = 0; y < customBMPHeight; y++) {
-        for (int x = 0; x < customBMPWidth; x++) {
-            QRgb pixelColor;
-
-            // Pozice v datech (BMP ukládá data odspodu nahoru, pokud biHeight > 0)
-            int row = (bmpInfoHeader.biHeight > 0) ? customBMPHeight - 1 - y : y;
-            int byteIndex = row * bytesPerRow;
-
-            if (customBMPBitsPerPixel == 24) {
-                // 24 bitů = 3 bajty na pixel
-                int index = byteIndex + x * 3;
-                if (index + 2 < customBMPData.size()) {
-                    int blue = static_cast<unsigned char>(customBMPData[index]);
-                    int green = static_cast<unsigned char>(customBMPData[index + 1]);
-                    int red = static_cast<unsigned char>(customBMPData[index + 2]);
-                    pixelColor = qRgb(red, green, blue);
-                } else {
-                    pixelColor = qRgb(0, 0, 0);
-                }
-            } else if (customBMPBitsPerPixel == 8) {
-                // 8 bitů = 1 bajt na pixel
-                int index = byteIndex + x;
-                if (index < customBMPData.size()) {
-                    int colorIndex = static_cast<unsigned char>(customBMPData[index]);
-                    pixelColor = customBMPPalette.value(colorIndex, qRgb(0, 0, 0));
-                } else {
-                    pixelColor = qRgb(0, 0, 0);
-                }
-            } else if (customBMPBitsPerPixel == 4) {
-                // 4 bity = 2 pixely na bajt
-                int index = byteIndex + x / 2;
-                if (index < customBMPData.size()) {
-                    int value = static_cast<unsigned char>(customBMPData[index]);
-                    int colorIndex;
-                    if (x % 2 == 0) {
-                        // Horní 4 bity
-                        colorIndex = (value >> 4) & 0x0F;
-                    } else {
-                        // Dolní 4 bity
-                        colorIndex = value & 0x0F;
-                    }
-                    pixelColor = customBMPPalette.value(colorIndex, qRgb(0, 0, 0));
-                } else {
-                    pixelColor = qRgb(0, 0, 0);
-                }
-            } else if (customBMPBitsPerPixel == 1) {
-                // 1 bit = 8 pixelů na bajt
-                int index = byteIndex + x / 8;
-                if (index < customBMPData.size()) {
-                    int value = static_cast<unsigned char>(customBMPData[index]);
-                    int shift = 7 - (x % 8);  // 7, 6, 5, 4, 3, 2, 1, 0
-                    int colorIndex = (value >> shift) & 0x01;
-                    pixelColor = customBMPPalette.value(colorIndex, qRgb(0, 0, 0));
-                } else {
-                    pixelColor = qRgb(0, 0, 0);
-                }
-            } else {
-                pixelColor = qRgb(0, 0, 0);  // Fallback pro nepodporované formáty
-            }
-
-            renderedImage.setPixel(x, y, pixelColor);
-        }
-    }
-
-    // Nastavení vykresleného obrázku
-    imageWidget->setImage(renderedImage);
-    image = renderedImage;
-    imageModified = false;
-
-    // Aktualizace informací o obrázku
-    updateImageInfo();
 }

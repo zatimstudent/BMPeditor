@@ -6,7 +6,7 @@
 class Filter {
 public:
     virtual ~Filter() = default;
-    virtual QImage apply(const QImage& image) = 0;
+    virtual QImage apply(const QImage& image) const = 0;
     virtual QString name() const = 0;
 };
 
